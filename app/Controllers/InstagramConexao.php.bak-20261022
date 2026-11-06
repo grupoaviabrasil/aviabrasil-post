@@ -1,0 +1,134 @@
+<?php
+
+namespace App\Controllers;
+
+use App\Models\ContaInstagramModel;
+use Config\Instagram as ConfigInstagram;
+
+class InstagramConexao extends BaseController
+{
+    private const URL_AUTORIZACAO   = 'https://www.instagram.com/oauth/authorize';
+    private const URL_TOKEN_CURTO   = 'https://api.instagram.com/oauth/access_token';
+    private const URL_TOKEN_LONGO   = 'https://graph.instagram.com/access_token';
+    private const MENSAGEM_ERRO_GENERICO = 'Não foi possível conectar com o Instagram. Tente novamente em alguns instantes.';
+
+    /**
+     * Redireciona o franquiado para o fluxo de OAuth oficial da Meta
+     * (método "Instagram API with Instagram Login", sem Página do Facebook).
+     */
+    public function conectar()
+    {
+        $config = config(ConfigInstagram::class);
+
+        if (! $config->appId || ! $config->redirectUri) {
+            return redirect()->to('/painel')->with('erro', 'Integração com Instagram não configurada (faltam credenciais no .env).');
+        }
+
+        $url = self::URL_AUTORIZACAO . '?' . http_build_query([
+            'client_id'     => $config->appId,
+            'redirect_uri'  => $config->redirectUri,
+            'response_type' => 'code',
+            'scope'         => $config->scope,
+        ]);
+
+        return redirect()->to($url);
+    }
+
+    /**
+     * Callback do OAuth: recebe o código de autorização, troca por access
+     * token (curto → longo prazo) e salva em contas_instagram vinculado
+     * ao franquiado logado.
+     */
+    public function retorno()
+    {
+        $erro = $this->request->getGet('error_description') ?? $this->request->getGet('error');
+
+        if ($erro) {
+            return redirect()->to('/painel')->with('erro', 'Autorização cancelada ou negada no Instagram.');
+        }
+
+        $codigo = $this->request->getGet('code');
+
+        if (! $codigo) {
+            return redirect()->to('/painel')->with('erro', self::MENSAGEM_ERRO_GENERICO);
+        }
+
+        $config = config(ConfigInstagram::class);
+
+        try {
+            $cliente = service('curlrequest', ['http_errors' => false]);
+
+            // 1) Troca o código por um token de curta duração (válido por 1h).
+            $respostaCurta = $cliente->post(self::URL_TOKEN_CURTO, [
+                'form_params' => [
+                    'client_id'     => $config->appId,
+                    'client_secret' => $config->appSecret,
+                    'grant_type'    => 'authorization_code',
+                    'redirect_uri'  => $config->redirectUri,
+                    'code'          => $codigo,
+                ],
+            ]);
+
+            $dadosCurta = json_decode((string) $respostaCurta->getBody(), true);
+
+            if (empty($dadosCurta['access_token']) || empty($dadosCurta['user_id'])) {
+                log_message('error', 'Falha ao trocar code por token do Instagram: {0}', [(string) $respostaCurta->getBody()]);
+
+                return redirect()->to('/painel')->with('erro', self::MENSAGEM_ERRO_GENERICO);
+            }
+
+            // 2) Troca pelo token de longa duração (válido por ~60 dias).
+            $respostaLonga = $cliente->get(self::URL_TOKEN_LONGO, [
+                'query' => [
+                    'grant_type'    => 'ig_exchange_token',
+                    'client_secret' => $config->appSecret,
+                    'access_token'  => $dadosCurta['access_token'],
+                ],
+            ]);
+
+            $dadosLonga = json_decode((string) $respostaLonga->getBody(), true);
+
+            if (empty($dadosLonga['access_token'])) {
+                log_message('error', 'Falha ao trocar token curto por longo do Instagram: {0}', [(string) $respostaLonga->getBody()]);
+
+                return redirect()->to('/painel')->with('erro', self::MENSAGEM_ERRO_GENERICO);
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'Erro de rede ao conectar Instagram: {0}', [$e]);
+
+            return redirect()->to('/painel')->with('erro', self::MENSAGEM_ERRO_GENERICO);
+        }
+
+        $expiraEmSegundos = (int) ($dadosLonga['expires_in'] ?? 60 * 24 * 60 * 60);
+        $usuario          = $this->usuarioLogado();
+        $contaModel       = new ContaInstagramModel();
+        $existente        = $contaModel->where('usuario_id', $usuario['id'])->first();
+
+        $dados = [
+            'usuario_id'        => $usuario['id'],
+            'instagram_user_id' => $dadosCurta['user_id'],
+            'access_token'      => base64_encode(service('encrypter')->encrypt($dadosLonga['access_token'])),
+            'token_expira_em'   => date('Y-m-d H:i:s', time() + $expiraEmSegundos),
+            'status_conexao'    => 'conectado',
+        ];
+
+        if ($existente) {
+            $contaModel->update($existente['id'], $dados);
+        } else {
+            $contaModel->insert($dados);
+        }
+
+        return redirect()->to('/painel')->with('sucesso', 'Instagram conectado com sucesso!');
+    }
+
+    /**
+     * Remove a vinculação da conta Instagram do franquiado logado.
+     */
+    public function desconectar()
+    {
+        $usuario = $this->usuarioLogado();
+        (new ContaInstagramModel())->where('usuario_id', $usuario['id'])->delete();
+
+        return redirect()->to('/painel')->with('sucesso', 'Instagram desconectado.');
+    }
+}

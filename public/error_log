@@ -1,0 +1,6 @@
+[27-Aug-2026 00:26:44 America/Fortaleza] PHP Warning:  require(/home4/vysevi73/post.aviabrasil.com.br/public/../app/Config/Paths.php): Failed to open stream: No such file or directory in /home4/vysevi73/post.aviabrasil.com.br/public/index.php on line 51
+[27-Aug-2026 00:26:44 America/Fortaleza] PHP Warning:  require(/home4/vysevi73/post.aviabrasil.com.br/public/../app/Config/Paths.php): Failed to open stream: No such file or directory in /home4/vysevi73/post.aviabrasil.com.br/public/index.php on line 51
+[27-Aug-2026 00:26:44 America/Fortaleza] PHP Fatal error:  Uncaught Error: Failed opening required '/home4/vysevi73/post.aviabrasil.com.br/public/../app/Config/Paths.php' (include_path='.:/opt/cpanel/ea-php83/root/usr/share/pear') in /home4/vysevi73/post.aviabrasil.com.br/public/index.php:51
+Stack trace:
+#0 {main}
+  thrown in /home4/vysevi73/post.aviabrasil.com.br/public/index.php on line 51

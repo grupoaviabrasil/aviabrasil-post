@@ -1,0 +1,20 @@
+PASTA CENTRAL DE MÍDIA — AVIA BRASIL
+=====================================
+
+Esta é a pasta programada onde a matriz (administrador) coloca o conteúdo
+que será postado automaticamente por todos os franquiados.
+
+Como adicionar conteúdo novo:
+
+1. Coloque a imagem aqui, ex: promocao-verao.jpg
+2. Crie um arquivo de texto com o MESMO NOME, contendo a legenda, ex: promocao-verao.txt
+3. O sistema varre esta pasta periodicamente (via cron do servidor) e
+   registra automaticamente qualquer imagem nova encontrada, desde que
+   tenha o arquivo de legenda correspondente.
+
+Formatos de imagem aceitos: .jpg, .jpeg (a API do Instagram não aceita PNG)
+O arquivo de legenda deve ter a extensão: .txt (mesmo nome da imagem)
+
+Esta pasta é PÚBLICA (fica dentro de /public), pois a API do Instagram
+exige uma URL pública para buscar a imagem antes de publicar. Não coloque
+aqui nenhum arquivo que não deva ficar acessível pela internet.
